@@ -1,0 +1,23 @@
+name: "Hello Github Action"
+description: "An action to be called from the hello world product to do a dry run of build and run in github"
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Setup dotnet
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Install dependencies
+      shell: bash
+      run: dotnet restore
+
+    - name: Build
+      shell: bash
+      run: dotnet build
+
+    - name: Run with the dotnet CLI
+      shell: bash
+      run: dotnet run

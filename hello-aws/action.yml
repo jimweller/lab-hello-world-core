@@ -1,0 +1,103 @@
+name: "Hello AWS Actions"
+description: "An action to be called from the hello world product to do deploy to AWS"
+
+
+inputs:
+
+  suffix:
+    description: "The unique suffix to use for the resources"
+    required: true
+
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Setup dotnet
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Install dependencies
+      shell: bash
+      run: dotnet restore
+
+    - name: Build
+      shell: bash
+      run: dotnet build -r win-x64 -p:PublishSingleFile=true -p:OutDir=hello-${{ inputs.suffix }} -p:SelfContained=true
+
+    - name: configure aws credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::12345678901:role/@fcc-demo-role
+        aws-region: us-east-1
+
+    - name: Upload to S3
+      shell: bash
+      run: |
+        zip -rqjdgds 100m hello-world.zip hello-${{ inputs.suffix }}
+        aws s3 cp hello-world.zip s3://fcc-demo-hello-world-artifacts/hello-${{ inputs.suffix }}.zip
+
+    - name: Terraform Factory
+      uses: actions/checkout@v4
+      with:
+        repository: jim-weller/fcc-demo-hello-world-infra-factory
+        ref: main
+
+
+    # Setup terraform
+    - name: Tofu Setup
+      uses: opentofu/setup-opentofu@v1
+
+    # Initialize terraform modules
+    - name: Tofu Init
+      run: tofu init
+      shell: bash
+      env:
+        TF_CLI_ARGS: '-var="me=${{ inputs.suffix }}"'
+
+
+    # Validate the TF HCL syntax
+    - name: Tofu Validate
+      run: tofu validate
+      shell: bash
+      env:
+        TF_CLI_ARGS: '-var="me=${{ inputs.suffix }}"'
+
+    # TF plan. Note that it is using the AWS credentials stored in the github
+    # secrets.
+    - name: Tofu Plan
+      run: tofu plan
+      shell: bash
+      env:
+        TF_CLI_ARGS: '-var="me=${{ inputs.suffix }}"'
+
+    # Finally, apply the terraform to dev.
+    - name: Tofu Apply
+      run: tofu apply
+      shell: bash
+      env:
+        TF_CLI_ARGS: '-auto-approve -var="me=${{ inputs.suffix }}"'
+
+
+#
+# Below here is for debugging OIDC if needed. 
+#
+
+#     - name: Sts GetCallerIdentity
+#       shell: bash
+#       run: |
+#         aws sts get-caller-identity
+
+#     - name: Checkout actions-oidc-debugger
+#       uses: actions/checkout@v4
+#       with:
+#         repository: github/actions-oidc-debugger
+#         ref: main
+# #        token: ${{ secrets.GITHUB_TOKEN }}
+#         path: ./.github/actions/actions-oidc-debugger
+
+#     - name: Debug OIDC Claims
+#       uses: ./.github/actions/actions-oidc-debugger
+#       with:
+#         audience: 'sts.amazonaws.com'

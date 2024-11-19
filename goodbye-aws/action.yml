@@ -1,0 +1,47 @@
+name: "Goodbye AWS Actions"
+description: "An action to be called to delete an instance of hello world"
+
+
+inputs:
+  suffix:
+    description: "The unique suffix to use for the resources"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: configure aws credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::12345678901:role/@fcc-demo-role
+        aws-region: us-east-1
+
+    - name: Delete from S3
+      shell: bash
+      run: |
+        aws s3 rm s3://fcc-demo-hello-world-artifacts/hello-${{ inputs.suffix }}.zip
+
+    - name: Terraform Factory
+      uses: actions/checkout@v4
+      with:
+        repository: jim-weller/fcc-demo-hello-world-infra-factory
+        ref: main
+
+
+    # Setup terraform using the hashicorp action. This just install terraform
+    # into the temporary working space.
+    - name: TF Setup (dev)
+      uses: opentofu/setup-opentofu@v1
+
+    - name: TF Init (dev)
+      run: tofu init
+      shell: bash
+      env:
+        TF_CLI_ARGS: '-var="me=${{ inputs.suffix }}"'
+
+    - name: Tofu Destroy
+      run: tofu destroy -auto-approve
+      shell: bash
+      env:
+        TF_CLI_ARGS: '-var="me=${{ inputs.suffix }}"'
